@@ -1,0 +1,102 @@
+- name: setup cart
+  hosts: cart
+  become: yes
+  #become_user: your_username
+  #become_method: sudo
+  tasks:
+  - name: install git
+    ansible.builtin.package:
+      name: git
+      state: present
+
+  - name: Download dotnet-install.sh script
+    get_url:
+      url: https://dot.net/v1/dotnet-install.sh
+      dest: /tmp/dotnet-install.sh
+
+  - name: Make dotnet-install.sh executable
+    file:
+      path: /tmp/dotnet-install.sh
+      mode: +x
+
+  - name: Install the latest version of .NET
+    command: /tmp/dotnet-install.sh --version latest
+    args:
+      chdir: /tmp/
+
+  - name: Install the latest version of ASP.NET Core runtime
+    command: /tmp/dotnet-install.sh --version latest --runtime aspnetcore
+    args:
+      chdir: /tmp/
+
+  - name: Install .NET SDK 8.0
+    command: /tmp/dotnet-install.sh --channel 8.0
+    args:
+      chdir: /tmp/
+
+  - name: Set environment variables
+    lineinfile:
+      path: /etc/profile.d/dotnet.sh
+      line: |
+        export DOTNET_ROOT=$HOME/.dotnet
+        export PATH=$PATH:$DOTNET_ROOT:$DOTNET_ROOT/tools
+
+  - name: cloning a git repository
+    git:
+      repo: https://github.com/srikanthhg/google-10-microservices-project.git
+      dest: /tmp
+      clone: yes
+      update: yes
+
+  - name: create hipstershop user
+    ansible.builtin.user:
+      name: hipstershop
+
+  - name: Recursively remove app directory
+    ansible.builtin.file:
+      path: /app
+      state: absent
+  
+  - name: create app directory
+    ansible.builtin.file:
+    path: /app
+    state: directory
+  
+  - name: copy app from tmp to app directory
+    ansible.builtin.copy: 
+    src: /tmp/google-10-microservices-project/cartservice
+    dest: /app
+    remote_src: yes 
+
+  - name: Dotnet restore, Publish, release
+      ansible.builtin.command:
+        cmd: |
+          dotnet restore cartservice.csproj -r linux-musl-x64 \
+          dotnet publish cartservice.csproj \
+            -p:PublishSingleFile=true \
+            -r linux-musl-x64 \
+            --self-contained true \
+            -p:PublishTrimmed=True \
+            -p:TrimMode=Full \
+            -c release \
+            -o /tmp/cartservice-publish \
+            --no-restore \
+          dotnet publish -c Release -o out
+      args:
+        chdir: /app/src/
+
+  - name: setup systemd cart service
+    ansible.builtin.copy:
+      src: cart.service
+      dest: /etc/systemd/system/cart.service
+  
+  - name: reload systemd
+    ansible.builtin.systemd_service:
+      daemon_reload: true
+
+  - name: start and enable cart service
+    ansible.builtin.service:
+      name: cart
+      state: restarted
+      enabled: yes
+
