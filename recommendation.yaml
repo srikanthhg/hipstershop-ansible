@@ -1,0 +1,89 @@
+- name: setup recommendation
+  hosts: recommendation
+  become: yes
+  #become_user: your_username
+  #become_method: sudo
+  tasks:
+  - name: install git
+    ansible.builtin.package:
+      name: git
+      state: present
+
+  - name: Download python source tarball
+    ansible.builtin.get_url: https://www.python.org/ftp/python/3.12.2/Python-3.12.2.tgz
+    dest: /tmp/Python-3.12.2.tgz
+
+  - name: extract python source
+    ansible.builtin.unarchive:
+    src: /tmp/Python-3.12.2.tgz
+    dest: /tmp
+    remote_src: yes
+  
+  - name: install development tools
+    ansible.builtin.package:
+      name: "{{ item }}"
+      state: present
+    with_items: 
+      - "Development Tools"
+      - gcc
+      - openssl-devel
+      - bzip2-devel 
+      - libffi-devel
+      - gcc-c++
+
+  - name: configure python build
+    ansible.builtin.command:
+      cmd: "{{ item }}" 
+      chdir: /tmp/Python-3.12.2
+    with_items:
+      - ./configure
+      - make
+      - "make altinstall"
+
+  - name: cloning a git repository
+    git:
+      repo: https://github.com/srikanthhg/google-10-microservices-project.git
+      dest: /tmp
+      clone: yes
+      update: yes
+
+  - name: create hipstershop user
+    ansible.builtin.user:
+      name: hipstershop
+
+  - name: Recursively remove app directory
+    ansible.builtin.file:
+      path: /app
+      state: absent
+  
+  - name: create app directory
+    ansible.builtin.file:
+    path: /app
+    state: directory
+  
+  - name: copy app from tmp to app directory
+    ansible.builtin.copy: 
+    src: /tmp/google-10-microservices-project/recommendationservice
+    dest: /app
+    remote_src: yes
+
+  - name: install dependencies
+    ansible.builtin.command: pip3.12 install -r requirements.txt
+    args:
+      chdir: /app
+
+  - name: setup systemd recommendation service
+    ansible.builtin.copy:
+      src: recommendation.service
+      dest: /etc/systemd/system/recommendation.service
+  
+  - name: reload systemd
+    ansible.builtin.systemd_service:
+      daemon_reload: true
+
+  - name: start and enable recommendation service
+    ansible.builtin.service:
+      name: recommendation
+      state: restarted
+      enabled: yes
+     
