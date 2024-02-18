@@ -33,7 +33,7 @@
   
   - name: copy app from tmp to app directory
     ansible.builtin.copy: 
-    src: /tmp/google-10-microservices-project/shipping
+    src: /tmp/google-10-microservices-project/shippingservice
     dest: /app
     remote_src: yes
 
