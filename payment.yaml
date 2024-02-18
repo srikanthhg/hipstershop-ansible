@@ -1,0 +1,63 @@
+- name: setup payment
+  hosts: payment
+  become: yes
+  tasks:
+  - name: install node js
+    ansible.builtin.command: 
+      cmd: "{{ item }}"
+      with_items:
+      - curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
+      - . ~/.nvm/nvm.sh
+      - nvm install --lts
+  
+  - name: install git
+    ansible.builtin.package:
+      name: git
+      state: present
+
+  - name: cloning a git repository
+      git:
+        repo: https://github.com/srikanthhg/google-10-microservices-project.git
+        dest: /tmp
+        clone: yes
+        update: yes
+
+  - name: create hipstershop user
+    ansible.builtin.user:
+      name: hipstershop
+
+  - name: Recursively remove app directory
+    ansible.builtin.file:
+      path: /app
+      state: absent
+  
+  - name: create app directory
+    ansible.builtin.file:
+    path: /app
+    state: directory
+
+  - name: copy app from tmp to app directory
+    ansible.builtin.copy: 
+    src: /tmp/google-10-microservices-project/paymentservice
+    dest: /app
+    remote_src: yes
+
+  - name: Install dependencies
+    ansible.builtin.command: npm install
+    args:
+      chdir: /app
+
+  - name: setup systemd payment service
+    ansible.builtin.copy:
+      src: payment.service
+      dest: /etc/systemd/system/payment.service
+  
+  - name: reload systemd
+    ansible.builtin.systemd_service:
+      daemon_reload: true
+
+  - name: start and enable payment service
+    ansible.builtin.service:
+      name: payment
+      state: restarted
+      enabled: yes
